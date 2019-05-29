@@ -4,11 +4,12 @@
 function usage() {
   cat <<EOS
 Usage:
-  git standup [-a <author name>] [-w <weekstart-weekend>] [-d <since-days-ago>] [-u <until-days-ago>] [-m <max-dir-depth>] [-g] [-h] [-f] [-c]
+  git standup [-a <author name>] [-w <weekstart-weekend>] [-d <since-days-ago>] [-u <until-days-ago>] [-m <max-dir-depth>] [-g] [-h] [-f] [-c] [-M]
 
   -a      - Specify author to restrict search to
   -w      - Specify weekday range to limit search to
   -m      - Specify the depth of recursive directory search
+  -M      - Display only merge commits and include commit message body
   -L      - Toggle inclusion of symbolic links in recursive directory search
   -d      - Specify the number of days back to include
   -u      - Specify the number of days back until this day
@@ -43,7 +44,12 @@ function colored() {
     GIT_PRETTY_DATE="%ad"
   fi
 
-  GIT_PRETTY_FORMAT="%Cred%h%Creset - %s %Cgreen($GIT_PRETTY_DATE) %C(bold blue)<%an>%Creset"
+  if [[ $option_M ]] ; then
+    GIT_PRETTY_FORMAT="%Cred%h%Creset - %s %C(bold)%b%Creset %Cgreen($GIT_PRETTY_DATE) %C(bold blue)<%an>%Creset"
+  else
+    GIT_PRETTY_FORMAT="%Cred%h%Creset - %s %Cgreen($GIT_PRETTY_DATE) %C(bold blue)<%an>%Creset"
+  fi
+
   COLOR=always
 
   if [[ $option_g ]] ; then
@@ -68,6 +74,12 @@ function uncolored() {
 
   GIT_PRETTY_FORMAT="%h - %s ($GIT_PRETTY_DATE) <%an>"
   COLOR=never
+
+  if [[ $option_M ]] ; then
+    GIT_PRETTY_FORMAT="%h - %s %b ($GIT_PRETTY_DATE) <%an>"
+  else
+    GIT_PRETTY_FORMAT="%h - %s ($GIT_PRETTY_DATE) <%an>"
+  fi
 
   if [[ $option_g ]] ; then
     GIT_PRETTY_FORMAT="$GIT_PRETTY_FORMAT gpg: %G?\n"
@@ -118,9 +130,9 @@ function runStandup() {
   fi
 }
 
-while getopts "hgfsd:u:a:w:m:D:A:B:LrcR" opt; do
+while getopts "hgfsd:u:a:w:m:D:A:B:MLrcR" opt; do
   case $opt in
-    h|d|u|a|w|m|g|D|f|s|L|r|A|B|c|R)
+    h|d|u|a|w|m|g|D|f|s|L|r|A|B|c|R|M)
       declare "option_$opt=${OPTARG:-0}"
       ;;
     \?)
@@ -179,6 +191,14 @@ fi
 
 if [[ $option_c ]] ; then
   STAT="--stat"
+fi
+
+if [[ $option_M ]]; then
+  MERGES="--grep=\"Merge\""
+  ONELINE=""
+else
+  MERGES="--no-merges"
+  ONELINE="--oneline"
 fi
 
 ## If -d flag is there, use its value for the since
@@ -271,13 +291,13 @@ for DIR in ${PROJECT_DIRS}; do
 
   GIT_LOG_COMMAND="git --no-pager log \
     --all
-    --no-merges
+    ${MERGES}
     --since=\"$SINCE\"
     ${UNTIL_OPT}
     ${AFTER_OPT}
     --author=\"$AUTHOR\"
     --abbrev-commit
-    --oneline
+    ${ONELINE}
     --pretty=format:'$GIT_PRETTY_FORMAT'
     --date='$GIT_DATE_FORMAT'
     --color=$COLOR
